@@ -11,23 +11,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MD5 extends Thread {
-    private Integer value;
-    private Integer port;
-
     private int valueToTest;
     private int end;
     private String salt;
-    private String hash;
+    //private String hash;
+    private byte[] byteHash;
     private DatagramSocket socket;
     private InetSocketAddress adrDest;
 
-    public MD5(int valueToTest, int end, String salt, String hash, DatagramSocket socket, InetSocketAddress adrDest) {
+    public MD5(int valueToTest, int end, String salt, byte[] byteHash, DatagramSocket socket, InetSocketAddress adrDest) {
         //System.out.println("valueToTest = " + valueToTest);
         //System.out.println("end = " + end);
         this.valueToTest = valueToTest;
         this.end = end;
         this.salt = salt;
-        this.hash = hash.toUpperCase();
+        //this.hash = hash.toUpperCase();
+        this.byteHash = byteHash;
         this.socket = socket;
         this.adrDest = adrDest;
     }
@@ -41,13 +40,16 @@ public class MD5 extends Thread {
                 //System.out.println(mdp);
                 byte[] hashD = digest.digest((salt + mdp).getBytes());
 
-                StringBuilder sb = new StringBuilder();
-                for (byte b: hashD) {
-                    sb.append(String.format("%02X", b));
+                boolean b = true;
+
+                for (int j = 0; j < hashD.length; j++) {
+                    if (hashD[j] != byteHash[j]) {
+                        b = false;
+                    }
                 }
 
-                if (sb.toString().equals(hash)) {
-                    byte[] bufE = new String("FOUND" + mdp).getBytes();
+                if (b) {
+                    byte[] bufE = new String("FOUND," + mdp).getBytes();
                     DatagramPacket dpE = new DatagramPacket(bufE, bufE.length, adrDest);
                     socket.send(dpE);
                     System.out.println("Solution found");
@@ -133,12 +135,19 @@ public class MD5 extends Thread {
         int begin = Integer.parseInt(reponseTemp[2]);
         int end = Integer.parseInt(reponseTemp[3]);
         String salt = reponseTemp[1];
-        String hash = reponseTemp[0];
+        String hash = reponseTemp[0].toUpperCase();
         System.out.println("begin = " + begin + " a");
         System.out.println("end = " + end + " a");
         System.out.println("salt = " + salt + " a");
         System.out.println("hash = " + hash + " a");
-        int numberOfThread = 10000;
+
+        int len = hash.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hash.charAt(i), 16) << 4) + Character.digit(hash.charAt(i + 1), 16));
+        }
+
+        int numberOfThread = 16;
         int step = (end - begin) / numberOfThread;
         //
         List<MD5> threads = new ArrayList<>();
@@ -150,7 +159,7 @@ public class MD5 extends Thread {
 
         for (int i = 0; i < numberOfThread; i++) {
             int temp = begin + (i * step);
-            threads.add(new MD5(temp, temp + step, salt, hash, socket, adrDest));
+            threads.add(new MD5(temp, temp + step, salt, data, socket, adrDest));
             threads.get(i).start();
         } 
         //
